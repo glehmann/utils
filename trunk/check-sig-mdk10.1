@@ -1,0 +1,7 @@
+#!/bin/bash
+
+# verifie les signatures de packages et laisse passer que les packages
+# qui ne sont pas signés
+
+cd /var/www/html/mdk/
+find -type f -name '*.rpm' -exec rpm -K {} \; | grep -v gpg
