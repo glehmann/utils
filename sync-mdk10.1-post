@@ -41,7 +41,6 @@ ln -sf /var/lib/urpmi/synthesis.hdlist.comm.cz /var/www/html/mdk/${VERSION}/comm
 #ln -s /var/lib/urpmi/synthesis.hdlist.plf-non-free.cz /var/www/html/mdk/${VERSION}/plf/non-free/synthesis.hdlist.cz
 
 
-exit
 
 # genere les fichiers MD5SUM
 DIR_LIST="/var/www/html/mdk/${VERSION}/i586/media/contrib/media_info/ \
