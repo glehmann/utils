@@ -1,0 +1,189 @@
+#!/bin/env python
+
+import os, commands, sys, tempfile, re
+from optparse import OptionParser
+from cStringIO import StringIO
+
+
+def getPasswd(s) :
+	tab = s.split(":")
+	dict = {}
+	dict['user'] = tab[0]
+	# dict['passwd'] = tab[1]
+	dict['uid'] = int(tab[2])
+	dict['gid'] = int(tab[3])
+	dict['name'] = tab[4]
+	dict['home'] = tab[5]
+	if dict['name'] == "" :
+		dict['name'] = dict['user']
+	return dict
+
+def getShadow(s) :
+	tab = s.split(":")
+	dict = {}
+	dict['user'] = tab[0]
+	dict['passwd'] = tab[1]
+	dict['shadowMin']  = -1 #tab[2]
+	dict['shadowMax']  = 999999 #tab[3]
+	dict['shadowWarning'] = 7 #tab[4]
+	dict['shadowExpire'] = -1 #tab[5]
+	dict['shadowInactive'] = -1 #tab[6]
+	dict['shadowFlag']  = 0
+	dict['crypt'] = 'crypt'
+	return dict
+
+ldif = ""
+
+def addLdapUser(dict) :
+	global ldif
+	if dict['crypt'] == 'clear' :
+		command = "slappasswd -s "+dict['user']
+		print command
+		cryptedPasswd = re.search(r'\{([^\}]+)\}(.+)', commands.getoutput(command))
+		dict['passwd'] = cryptedPasswd.group(2)
+		dict['crypt'] = cryptedPasswd.group(1)
+	ldif += """dn:uid=%(user)s,ou=people,dc=jouy,dc=inra,dc=fr
+uid: %(user)s
+cn: %(name)s
+sn: %(name)s
+userPassword: {%(crypt)s}%(passwd)s
+loginShell: /bin/bash
+uidNumber: %(uid)s
+gidNumber: %(gid)s
+homeDirectory: %(home)s
+shadowMin: %(shadowMin)s
+shadowMax: %(shadowMax)s
+shadowWarning: %(shadowWarning)s
+shadowInactive: %(shadowInactive)s
+shadowExpire: %(shadowExpire)s
+shadowFlag: %(shadowFlag)s
+objectClass: top
+objectClass: person
+objectClass: posixAccount
+objectClass: shadowAccount
+
+""" % dict
+	
+	#print ldif
+
+
+def addLocalUser(dict):
+	command = "useradd"
+	command += " -u "+str(dict['uid'])
+	command += " -g "+str(dict['gid'])
+	command += " -d "+dict['home']
+	command += " -p "+dict['user']
+	command += " -c '"+dict['name']+"'"
+	command += " "+dict['user']
+	#print command
+	if os.system(command) != 0 :
+		sys.exit(1)
+
+# 	if options.groups :
+# 		command = "usermod"
+# 		command += " -G "+",".join(options.groups)
+# 		command += " "+user
+# 		print command
+# 		if os.system(command) != 0 :
+# 			sys.exit(1)
+# 	print dict
+
+def main() :
+	parser = OptionParser(usage=r"""usage: %prog [options] userName""")
+	# parser.add_option("-G", "--group", dest="groups", action="append", default=[], help="GROUP est un groupe supplementaire auquel l'utilisateur doit appartenir")
+	parser.add_option("-r", "--remote", dest="remote", default=None, metavar="ID@HOST", help="")
+	parser.add_option("-H", "--ldap-host", dest="ldapHost", default="localhost", metavar="HOST", help="")
+	parser.add_option("-p", "--password", action="store_true", dest="passwd", default=False)
+	parser.add_option("-u", "--users", action="store_true", dest="users", default=False)
+	parser.add_option("-s", "--system", action="store_true", dest="system", default=False)
+	parser.add_option("-f", "--flat", action="store_true", dest="flat", default=False)
+	
+	(options, args) = parser.parse_args()
+	
+	if not options.system and not options.users :
+		if args == [] :
+			sys.stderr.write("il faut fournir au moins un nom ou utiliser --users ou --system\n")
+			return 1
+		options.system = True
+		options.users = True
+	
+	# recuperation du fichier /etc/passwd
+	command = "cat /etc/passwd"
+	if options.remote :
+		command = 'ssh '+options.remote+' '+command
+	# print command
+	passwdFile = StringIO(commands.getoutput(command))
+	passwdDict = {}
+	for line in passwdFile :
+		if not line.startswith('#') :
+			dict = getPasswd(line)
+			passwdDict[dict['user']] = dict
+	# on supprime tina... il devrait etre dans les uid systeme !!!
+	if passwdDict.has_key('tina') :
+		del passwdDict['tina']
+	
+	# recuperation de /etc/shadow
+	if options.passwd :
+		command = "cat /etc/shadow"
+		if options.remote :
+			command = 'ssh '+options.remote+' '+command
+		#print command
+		shadowFile = StringIO(commands.getoutput(command))
+		shadowDict = {}
+		for line in shadowFile :
+			if not line.startswith('#') :
+				dict = getShadow(line)
+				shadowDict[dict['user']] = dict
+	
+	if args != [] :
+		users = args
+	else :
+		users = passwdDict.keys()
+	
+	
+	for user in users :
+		dict = passwdDict[user]
+		
+		# recuperation du passwd
+		if options.passwd :
+			dict.update(shadowDict[user])
+		else :
+			dict.update({
+			'passwd' : user,
+			'shadowMin' : -1,
+			'shadowMax' : 999999,
+			'shadowWarning' : 7,
+			'shadowExpire' : -1,
+			'shadowInactive' : -1,
+			'shadowFlag' : 0,
+			'crypt' : 'clear',
+			})
+			
+		# verification de l'uid
+		if options.users and not options.system and not (500 < dict['uid'] < 65534) :
+			continue
+		if not options.users and options.system and 500 < dict['uid'] < 65534 :
+			continue
+		
+		if not os.path.isdir(os.path.dirname(dict['home'])) :
+			os.makedirs(os.path.dirname(dict['home']))
+			
+		sys.stderr.write("ajout de "+dict['user']+".\n")
+		if options.flat :
+			addLocalUser(dict)
+		else :
+			addLdapUser(dict)
+		#break
+	
+	if not options.flat :
+		ldifFile = tempfile.NamedTemporaryFile()
+		ldifFile.write(ldif)
+		ldifFile.flush()
+		command = 'ldapadd -f '+ldifFile.name+' -h '+options.ldapHost+' -x -W -D cn=Manager,dc=jouy,dc=inra,dc=fr'
+		print ldif, command
+		if os.system(command) != 0 :
+			sys.exit(1)
+		
+	
+if __name__ == '__main__' :
+        main()

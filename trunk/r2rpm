@@ -1,0 +1,185 @@
+#!/usr/bin/python
+#coding: iso-8859-15
+
+import os, os.path, sys, re, commands, time, commands
+from optparse import OptionParser
+
+
+templateSpec = """%%define module	%(Package)s
+%%define realver	%(Version)s
+%%define release	1mdk
+
+%%define name	R-%%{module}
+%%define versionok	%%(echo '%%{realver}' | sed 's/-/\./g')
+
+Summary:	%%{module} R module
+Name:		%%{name}
+Version:	%%{versionok}
+Release:	%%{release}
+Source0:	http://cran.r-project.org/src/contrib/%%{module}_%%{realver}.tar.bz2
+License:	%(License)s
+Group: 		Development/Libraries
+BuildRoot: 	%%{_tmppath}/%%{name}-%%{versionok}-buildroot
+Prefix: 	%%{_prefix}
+Url: 		%(URL)s
+BuildRequires:	%(buildreq)s
+Requires:	%(Depends)s
+
+%%description
+%(Description)s
+
+ 
+%%prep
+%%setup -n %%{module} -q
+
+%%install
+R CMD INSTALL -l $RPM_BUILD_ROOT/%%{_libdir}/R/library .
+
+%%clean
+rm -rf $RPM_BUILD_ROOT
+
+%%post
+R CMD perl %%{_libdir}/R/share/perl/build-help.pl --htmllists
+cat %%{_libdir}/R/library/*/CONTENTS > %%{_libdir}/R/doc/html/search/index.txt
+
+%%postun
+R CMD perl %%{_libdir}/R/share/perl/build-help.pl --htmllists
+cat %%{_libdir}/R/library/*/CONTENTS > %%{_libdir}/R/doc/html/search/index.txt
+
+%%files
+%%defattr(-,root,root)
+%%{_libdir}/R/library
+
+%%changelog
+* %(rpmDate)s %(packager)s %(VersionOK)s-1mdk
+- initial release (with r2rpm)
+"""
+
+
+def main() :
+	parser = OptionParser()
+	# parser.add_option("-r", "--rpm-root", dest="rpmroot", default=".", metavar="DIR", help="rpm root")
+	(options, args) = parser.parse_args()
+	
+	# on determine rpm root
+	command = "grep '%_topdir' ~/.rpmmacros | awk  '{print $2}'"
+	# print command
+	topdir = commands.getoutput(command)
+	command = "grep '%_gpg_name' ~/.rpmmacros"
+	# print command
+	packager = re.search(r'^%_gpg_name\s+(.+)$', commands.getoutput(command)).group(1)
+	
+	# determination des packages deja installés
+	command = "rpm -ql R-base | grep /usr/lib/R/library/"
+	libFiles = commands.getoutput(command)
+	baseLib = []
+	for f in libFiles.splitlines() :
+		libTab = f.split("/")
+		if len(libTab) > 5 :
+			lib = libTab[5]
+			if lib not in baseLib :
+				baseLib.append(lib)
+	print baseLib
+	
+	
+	toBuild = []
+	
+	for fName in args :
+		# recuperation des informations sur le package
+		f = file(fName)
+		modName = os.path.basename(fName).split("_")[0]
+		print 'creation de '+modName
+		(st, desc) = commands.getstatusoutput("tar xzOf "+fName+" "+modName+"/DESCRIPTION")
+		if st :
+			# les infos n'ont pas pu etre recupérées !!
+			sys.stderr.write("Error in "+fName+" file.\n")
+			return 1
+			
+		# lecture des infos de DESCRIPTION
+		# toutes les infos sont placées dans le dictionnaire descDict
+		# elle vont permettre de creer le fichier de spec
+		# certaines sont initialisées par defaut
+		descDict = {
+			"URL": "?", 
+			"Description": "?",
+			"packager" : packager,
+			"buildreq" : "R-base",
+			'Depends' : "R-base",
+			"Package" : modName,
+			}
+		descTab = desc.splitlines()
+		currentKey = None
+		
+		for line in descTab :
+			match = re.match(r"^(\w+):\s+(.+)$", line)
+			if match :
+				currentKey = match.group(1)
+				value = match.group(2)
+				descDict[currentKey] = value
+			elif currentKey != None :
+				descDict[currentKey] += "\n" + line
+		
+		# normalisation des valeurs (sauf description)
+		for key in descDict.keys() :
+			if key != "Description" :
+				descDict[key] = " ".join(descDict[key].split())
+		descDict["URL"] = re.sub(r",\s+|\s+", "\n#", descDict["URL"])
+		
+# 		print descDict["Description"]
+# 		print descDict
+		
+		# 1.0-18
+		descDict['VersionOK'] = descDict['Version'].replace("-", ".")
+		# GPL version 2 or newer
+		if descDict['License'].startswith("GPL") or descDict['License'].startswith("GNU GPL"):
+			descDict['License'] = "GPL"
+		
+		# deps
+		if descDict.has_key('Depends') :
+			depTab = descDict['Depends'].split(",")
+			depTab = [dep.strip() for dep in depTab]
+			deps = []
+			rdepOk = False
+			for dep in depTab :
+				if dep == "R" or dep.startswith("R ") or dep.startswith("R-base") :
+					rver = " ".join(dep.split(" ")[1:]).replace("(", "").replace(")", "")
+					rdep = "R-base "+rver
+					deps.append(rdep)
+					rdepOk = True
+				elif dep.split(" ")[0] not in baseLib :
+					deps.append("R-"+dep.replace("(", "").replace(")", "").replace("-", "."))
+			if not rdepOk :
+				deps.append("R-base")
+			
+			descDict['Depends'] = " ".join(deps)
+			descDict["buildreq"] = " ".join(deps)
+			
+			if commands.getoutput("tar tzf "+fName+" | egrep '\.c$|\.cpp$|\.cc$'") != "":
+				descDict["buildreq"] += " gcc gcc-cpp gcc-c++"
+			if commands.getoutput("tar tzf "+fName+" | egrep '\.f$'") != "":
+				descDict["buildreq"] += " gcc-g77"
+		
+		# date
+		descDict['rpmDate'] = time.strftime("%a %b %d %Y")
+		specName = topdir+"/SPECS/R-"+modName+".spec"
+		spec = file(specName, "w")
+		# print descDict
+		spec.write(templateSpec % descDict)
+		spec.close()
+		
+		# command = "bzme -f "+options.rpmroot+"/SOURCES/"+os.path.basename(fName)
+		command = "gunzip -c "+fName+" | bzip2 -c > "+topdir+"/SOURCES/"+modName+"_"+descDict['Version']+".tar.bz2"
+		if os.system(command) :
+			sys.exit(1)
+			
+		toBuild.append(specName)
+		
+	command = "rpmbuild -ba --sign --clean "+" ".join(toBuild)
+	print command
+	if os.system(command) :
+		sys.exit(1)
+		
+		
+
+if __name__ == '__main__' :
+        sys.exit(main())
