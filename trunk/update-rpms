@@ -1,0 +1,8 @@
+#!/bin/bash
+
+# inutile de mettre a jour les media, sync-mdk10.1-post l'a deja fait !
+#urpmi.update -aq --no-md5sum
+
+
+urpmi -q --auto-select --auto --update --no-verify-rpm
+

@@ -1,0 +1,8 @@
+#!/usr/bin/env rrsync
+rsync://ftp.sunet.se/pub/Linux/distributions/mandrakelinux/official/updates/10.1/main_updates/		/var/www/html/mdk/10.1			--checksum
+rsync://ftp.sunet.se/pub/Linux/distributions/mandrakelinux/devel/10.1/i586				/var/www/html/mdk/10.1			--checksum
+rsync://bronze.jouy.inra.fr:10001/comm/10.1/i586/*							/var/www/html/mdk/10.1/comm		--checksum
+rsync.planetmirror.com::plf/mandrake/free/10.1/*							/var/www/html/mdk/10.1/plf/free		--exclude x86_64 --exclude ppc
+rsync.planetmirror.com::plf/mandrake/non-free/10.1/*							/var/www/html/mdk/10.1/plf/non-free	--exclude x86_64 --exclude ppc
+
+
