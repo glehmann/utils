@@ -33,6 +33,7 @@ done
 
 $RSYNC --exclude-from=/root/excludelist \
     -aq \
+    --exclude darcs
     --delete \
     --delete-excluded \
     --backup \
