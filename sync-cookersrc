@@ -1,4 +1,4 @@
 #!/usr/bin/env rrsync
-rsync://ftp.sunet.se/pub/Linux/distributions/mandrakelinux/devel/cooker/SRPMS/	/var/www/html/mdk/cooker/SRPMS	--checksum
+rsync://ftp.sunet.se/pub/Linux/distributions/mandrakelinux/devel/cooker/SRPMS/	/var/www/html/mdk/cooker/	--checksum
 
 
