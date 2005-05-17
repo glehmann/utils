@@ -34,6 +34,7 @@ done
 $RSYNC --exclude-from=/root/excludelist \
     -aq \
     --exclude darcs \
+    --exclude kitware \
     --delete \
     --delete-excluded \
     --backup \
