@@ -2,6 +2,6 @@
 
 cd /darcs/itk
 tailor --update --verbose
-darcs tag -m date `+%F`
+darcs tag -m `date +%F`
 
 
