@@ -41,9 +41,11 @@ $RSYNC --exclude-from=/root/excludelist \
     --backup \
     --backup-dir=${REMOTE_INC_DIR}/${DAY} \
     * \
-    pixel:${REMOTE_CURRENT_DIR}
+    pixel:${REMOTE_CURRENT_DIR} \
+|| echo 'il faut vite faire quelquechose !' | mail -s 'Alerte: rsync a echoue sur voxel' gaetan.lehmann@jouy.inra.fr christophe.caron@jouy.inra.fr
 
 # compression de la difference et sauvegarde de la liste de fichiers
+(
 ssh pixel \
  cd $REMOTE_INC_DIR/$DAY \; \
  tar cjf ../${DAY}.tar.bz2 \* \; \
@@ -51,7 +53,7 @@ ssh pixel \
  cd $REMOTE_CURRENT_DIR \; \
  find \> $REMOTE_INC_DIR/${DAY}.list \; \
  bzip2 $REMOTE_INC_DIR/${DAY}.list \; \
-
+) || echo 'il faut vite faire quelquechose !' | mail -s 'Alerte: la sauvegarde des fichiers supprimes a echoue sur voxel' gaetan.lehmann@jouy.inra.fr christophe.caron@jouy.inra.fr
 #
 
 
