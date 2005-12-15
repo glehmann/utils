@@ -40,6 +40,7 @@ $RSYNC --exclude-from=/root/excludelist \
     --delete-excluded \
     --backup \
     --backup-dir=${REMOTE_INC_DIR}/${DAY} \
+    --checksum \
     * \
     pixel:${REMOTE_CURRENT_DIR} \
 || echo 'il faut vite faire quelquechose !' | mail -s 'Alerte: rsync a echoue sur voxel' gaetan.lehmann@jouy.inra.fr christophe.caron@jouy.inra.fr
