@@ -5,7 +5,7 @@
 #
 
 rdiff-backup \
-   -v 5
+   -v 5 \
    --ssh-no-compression \
    --exclude /home/darcs/ \
    --exclude /home/kitware/ \
