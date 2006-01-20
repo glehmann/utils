@@ -5,3 +5,5 @@ tailor --update --verbose
 darcs tag -m `date +%F`
 
 
+cd /darcs/contrib-itk/WrapITK
+darcs dist
