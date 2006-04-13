@@ -1,0 +1,8 @@
+#!/usr/bin/env rrsync
+rsync://distrib-coffee.ipsl.jussieu.fr/pub/linux/MandrivaLinux/devel/2006.0	/miroir/mdk	-H --partial
+rsync://distrib-coffee.ipsl.jussieu.fr/pub/linux/MandrivaLinux/devel/10.2	/miroir/mdk	-H --partial
+rsync://distrib-coffee.ipsl.jussieu.fr/pub/linux/MandrivaLinux/devel/10.1	/miroir/mdk	-H --partial
+rsync://distrib-coffee.ipsl.jussieu.fr/pub/linux/MandrivaLinux/devel/cooker	/miroir/mdk	-H --partial --exclude alpha --exclude ppc --exclude ia64 --exclude sparc64 --exclude sparc
+rsync://distrib-coffee.ipsl.jussieu.fr/pub/linux/MandrivaLinux/official/updates	/miroir/mdk	-H --partial
+rsync://distrib-coffee.ipsl.jussieu.fr/pub/linux/plf/mandriva/*	/miroir/mdk/plf	-H --partial
+rsync://bronze.jouy.inra.fr:10001/comm	/miroir/mdk/comm	-H --partial
