@@ -14,4 +14,4 @@ zip /darcs/contrib-itk/WrapITK/WrapITK.zip WrapITK
 
 cd WrapITK/article
 make
-cp *.pdf /darcs/contrib-itk/WrapITK/
+cp -f *.pdf /darcs/contrib-itk/WrapITK/
