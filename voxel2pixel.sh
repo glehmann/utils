@@ -64,6 +64,7 @@ rdiff-backup \
    --exclude $SNAP_DIR/kitware/ \
    --exclude $SNAP_DIR/lost+found/ \
    --exclude $SNAP_DIR/TT_DB/ \
+   --exclude-regexp '.*/non archive/.*' \
    $SNAP_DIR \
    $DEST_DIR \
 || backupFailed
