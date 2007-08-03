@@ -1,0 +1,22 @@
+#!/bin/sh
+
+# create a temp dir
+tmp=`mktemp -d`
+# find the name of the repository
+name=`basename $PWD`
+# generate the tar.gz file
+darcs dist
+# store the repository path
+rep=$PWD
+# switch to the temp dir
+cd $tmp
+# extract the tar.gz
+tar xzf $rep/$name.tar.gz
+# create the zip
+zip -rq $rep/$name.zip $name
+# and the tar.bz2
+tar cjf $rep/$name.tar.bz2 $name
+# remove the temp dir
+cd -
+rm -rf $tmp
+		
