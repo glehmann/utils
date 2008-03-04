@@ -13,6 +13,7 @@ removeSnapshot() {
 }
 
 removeMountPoint() {
+  umount $SNAP_DIR/papha/  || warn "Erreur lors du demontage du partage nfs"
   umount $SNAP_DIR || warn "Erreur lors du demontage du snapshot"
 }
 
@@ -55,6 +56,7 @@ lvcreate --size 10G --snapshot --name snap /dev/data/home || error "Erreur lors 
 # creation d'un repertoire et montage du snapshot
 mkdir -p $SNAP_DIR
 mount /dev/data/snap $SNAP_DIR  || mountFailed
+mount --bind /home/papha/ $SNAP_DIR/papha/ || mountFailed
 
 # la sauvegarde
 rdiff-backup \
