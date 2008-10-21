@@ -14,7 +14,6 @@ removeMountPoint() {
   ssh voxel umount /mnt/home-snap || warn "Erreur lors du demontage du snapshot"
 }
 
-
 # les procedures d'erreur
 
 warn() {
@@ -47,7 +46,7 @@ backupFailed() {
 # necessaire pour le snapshot lvm
 ssh voxel modprobe dm_snapshot || error "Impossible de charger le module dm_snapshot"
 
-# creation du snapshot avece 10G de tampon
+# creation du snapshot avec 10G de tampon
 ssh voxel lvcreate --size 100G --snapshot --name snap /dev/data/home || error "Erreur lors de la creation du snapshot"
 
 # creation d'un repertoire et montage du snapshot
@@ -68,12 +67,15 @@ rdiff-backup \
 || backupFailed
 #   --exclude-sockets \
 
+# copie du repertoire de backup sur voxel pour l'avoir en double
+rsync -avH --delete /data/voxel-images/rdiff-backup-data voxel:/data/ || error "rsync a echoue."
+
 # demontage du snapshot et suppression du repertoire
 removeMountPoint 
 
-# suppression du snapshot
-# --force est necessaire pour que lvremove ne demandre pas de confirmation
-removeSnapshot 
+# suppression du vieux snapshot
+# --force est necessaire pour que lvremove ne demande pas de confirmation
+ssh voxel lvremove --force /dev/data/home-backup || warn "Erreur lors de la suppression de l'ancien snapshot"
 
-# copie du repertoire de backup sur voxel pour l'avoir en double
-rsync -avH --delete /data/voxel-images/rdiff-backup-data voxel:/data/ || error "rsync a echoue."
+# et renommage du snapshot actuel
+ssh voxel lvrename /dev/data/snap /dev/data/home-backup || error "Erreur lors du renommage du snapshot"
