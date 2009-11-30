@@ -1,0 +1,130 @@
+#!/usr/bin/bash
+
+set -e
+export LC_ALL=C
+
+if [ $# -lt 2 ]; then
+  echo "usage: zmigrate zone host"
+  exit 1
+fi
+
+Z=$1
+DEST=$2
+shift
+shift
+OPTSFS=$@
+
+########################################################
+# utility functions
+########################################################
+
+function syncfs {
+  pool=$1
+  Z=$2
+  snap=$3
+  zfs snapshot -r $pool/zones/$Z@$snap
+  # get the last snapshot on the remote host and use it for an incremental update, if possible
+  distsnap=`ssh $DEST zfs list -r -s creation -o name -H $pool/zones/$Z | grep $pool/zones/$Z@ | tail -1 | cut -d@ -f2`
+  if [ -z "$distsnap" ]; then
+    zfs send -R $pool/zones/$Z@$snap | ssh -c arcfour $DEST zfs receive -dFv $pool
+  else
+    zfs send -RI $distsnap $pool/zones/$Z@$snap | ssh -c arcfour $DEST zfs receive -dFv $pool
+  fi
+
+}
+
+function zshutdown {
+  Z=$1
+  zlogin $Z shutdown -i0 -g0 -y
+  for i in {12..1}; do
+    if [ -z "`zoneadm -z $Z list -p | grep :installed:`" ]; then
+      echo waiting for $Z to shutdown. $i attempts left before killing...
+      sleep 5
+    else
+      echo $Z halted.
+      return 0
+    fi
+  done
+  echo killing $Z...
+  zoneadm -z $Z halt
+  echo $Z halted.
+}
+
+########################################################
+# copy the zone config on the remote host
+########################################################
+
+# zonecfg -z $Z export > /tmp/$Z.zone
+# scp /tmp/$Z.zone $DEST:/tmp/$Z.zone
+# ssh $DEST zonecfg -z $Z -f /tmp/$Z.zone
+# ssh $DEST zoneadm -z $Z list
+
+# move rctl sections at the end because of bug http://bugs.opensolaris.org/bugdatabase/view_bug.do?bug_id=6565738
+
+echo ========== Copying $Z configuration to the destination host... ========== 
+
+zonecfg -z $Z export | python -c 'import sys
+last=""
+rctl=False
+for l in sys.stdin.readlines():
+  if l == "add rctl\n":
+    rctl=True
+  if rctl:
+    last+=l
+  else:
+    print l,
+  if l == "end\n":
+    rctl=False
+print last,
+' | ssh $DEST zonecfg -z $Z
+ssh $DEST zoneadm -z $Z list
+
+echo  ========== $Z copied. ========== 
+
+########################################################
+# pre sync filesystems, to decrease down time
+########################################################
+
+echo  ========== Pre-syncing $Z pools on the destination host... ========== 
+
+# a time stamp to create the snapshots 
+snap=`date +%Y-%m-%d_%Hh%Mm%S`-zmigrate
+
+# the mandatory fs: the one in rpool
+syncfs rpool $Z $snap
+
+# the optional fs: the one in data
+if zfs list data/zones/$Z 2>/dev/null >/dev/null; then
+  syncfs data $Z $snap
+fi
+
+echo ==========  $Z pool pre-synced. ========== 
+
+########################################################
+# stop the zone and fully sync the file systems
+########################################################
+
+echo  ========== Syncing $Z pools on the destination host... ========== 
+
+zshutdown $Z
+zoneadm -z $Z detach
+
+snap2=`date +%Y-%m-%d_%Hh%Mm%S`-zmigrate
+syncfs rpool $Z $snap2
+if zfs list data/zones/$Z 2>/dev/null >/dev/null; then
+  syncfs data $Z $snap2
+fi
+
+echo  ========== $Z pool synced. ========== 
+
+########################################################
+# move the zone to the new host
+########################################################
+
+echo  ========== Moving $Z on the destination host... ========== 
+
+ssh $DEST zoneadm -z $Z attach -u
+ssh $DEST zoneadm -z $Z boot
+zonecfg -z $Z delete -F
+
+echo  ========== $Z moved. ========== 

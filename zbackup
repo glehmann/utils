@@ -1,0 +1,191 @@
+#!/usr/bin/bash
+
+set -e
+export LC_ALL=C
+
+
+if [ $# -lt 2 ]; then
+  echo "usage: zbackup host zone..."
+  echo "       zbackup host -a"
+  exit 1
+fi
+
+
+DEST=$1
+shift
+ZONES=$@
+
+# running zones
+if [[ "$ZONES" == "-a" ]]; then
+  ZONES=`zoneadm list | egrep -v '^global$'`
+fi
+
+
+
+function syncfs {
+  pool=$1
+  Z=$2
+  snap=$3
+  # get the last snapshot on the remote host and use it for an incremental update, if possible
+  distsnap=`ssh $DEST zfs list -r -s creation -o name -H $pool/zones/$Z | grep $pool/zones/$Z@ | tail -1 | cut -d@ -f2`
+  if [ -z "$distsnap" ]; then
+    zfs send -R $pool/zones/$Z@$snap | ssh -c arcfour $DEST zfs receive -dFv $pool
+  else
+    zfs send -RI $distsnap $pool/zones/$Z@$snap | ssh -c arcfour $DEST zfs receive -dFv $pool
+  fi
+
+}
+
+
+# first sync the fs to make the freeze as short as possible - zfs snapshot syncs the fs, if there is
+# not much to sync, the snapshot is done faster
+sync
+
+# create the snapshots - this step is important, and has very little chance to fail
+snap=`date +%Y-%m-%d_%Hh%Mm%S`
+for Z in $ZONES; do
+  # do we have a file system for this zone on data zpool
+  if zfs list data/zones/$Z 2>/dev/null >/dev/null; then
+    # we have two pools to snapshot at the same time - we have to freeze the zone
+    # to be able to to that.
+    running_processes=`ps -o s= -o pid= -z $Z | grep -v T | awk '{print $2}'`
+    kill -s SIGSTOP $running_processes
+    zfs snapshot -r rpool/zones/$Z@$snap
+    zfs snapshot -r data/zones/$Z@$snap
+    kill -s SIGCONT $running_processes
+  else
+    # just take the snapshot
+    zfs snapshot -r rpool/zones/$Z@$snap
+  fi
+done
+
+
+# copy the fs to the remote host
+for Z in $ZONES; do
+  syncfs rpool $Z $snap
+  if zfs list data/zones/$Z 2>/dev/null >/dev/null; then
+      syncfs data $Z $snap
+  fi
+done
+
+exit 0
+
+
+
+
+
+
+
+
+
+
+# nom du système de fichier à sauvegarder
+backupfs=$1
+remote_host=$2
+remotefs=$3
+
+if [[ -z $backupfs ]] || [[ -z $remote_host ]] || [[ -z $remotefs ]]
+then
+     echo usage: $0 backupfs remote_host remotefs
+     exit 1
+fi
+
+
+function lzfs {
+  pfexec /usr/sbin/zfs $@
+}
+
+function rzfs {
+  ssh $remote_host pfexec /usr/sbin/zfs $@
+}
+
+function crzfs {
+#  /usr/local/bin/tamp | /usr/local/bin/pv -ftbri 10000000 | ssh $remote_host "/usr/local/bin/tamp -d | pfexec /usr/sbin/zfs $@"
+#  /usr/local/bin/pv -ftbri30 -cN raw | /usr/local/bin/tamp | /usr/local/bin/pv -ftbri30 -cN comp | ssh $remote_host "/usr/local/bin/tamp -d | pfexec /usr/sbin/zfs $@"
+#  /usr/local/bin/pv -ftbri30 | ssh $remote_host "pfexec /usr/sbin/zfs $@"
+  ssh $remote_host pfexec /usr/sbin/zfs $@
+}
+
+
+# avant toute chose, prendre un snapshot.
+# Peu importe qu'on puisse le transmettre ou pas, il faut le creer !
+
+# On détermine le nom du prochain snapshot.
+new_snapshot=`date +backup_%Y-%m-%d_%Hh%M`
+while lzfs list $backupfs@$new_snapshot 2> /dev/null > /dev/null ; do
+  echo "Patienter SVP"
+  sleep 1
+  new_snapshot=`date +backup_%Y-%m-%d_%Hh%M`
+done
+echo "Nom du nouveau snapshot: $new_snapshot"
+
+# On effectue un nouveau snapshot
+lzfs snapshot -r $backupfs@$new_snapshot
+
+
+# pour éviter de figer le systeme distant pendant plusieurs secondes, on le force à synchroniser les systèmes de fichier.
+ssh $remote_host "while [ 1 ]; do sync; done" &
+sync_pid=$!
+
+if [[ "$backupfs" =~ "/" ]]; then
+  rbackupfs=$remotefs/`echo $backupfs | cut -d/ -f 2-`
+else
+  rbackupfs=$remotefs
+fi
+
+if rzfs list $rbackupfs 2> /dev/null > /dev/null ; then
+  # nom de la dernière sauvegarde commencée
+  last_snapshot=`rzfs list -rH -t snapshot -o name -s creation $rbackupfs | gegrep "^$rbackupfs@" | cut -d @ -f2 | tail -1`
+  echo "Le dernier snapshot trouvé est : $last_snapshot"
+
+  # On s'assure que tous les systèmes de fichier sur le serveur de sauvegarde sont tous au même état (date) de 
+  # dernière sauvegarde, sinon on met à jour les systèmes de fichier dont les sauvegardes sont plus anciennes.
+  #
+
+  # On parcours un à un les systèmes de fichier à sauvegarder
+  for fs in `lzfs list -H -o name -r -t filesystem $backupfs`; do
+  
+    rfs=`echo $fs | sed "s#^$backupfs#$remotefs#"`
+
+    # on récupère le plus recent des snapshots sur le serveur des sauvegardes
+    dist_fs_last_snap=`rzfs list -rH -t snapshot -o name -s creation $rfs | cut -d @ -f2 | tail -1`
+  
+    if [ "$dist_fs_last_snap" != "" ] ; then
+      # Le système de fichier existe sur le serveur de sauvegarde, s'il n'est pas à jour, la différence est envoyé.
+      if [ "$dist_fs_last_snap" != "$last_snapshot" ] ; then
+        echo "Envoi du snapshot $fs@($dist_fs_last_snap->$last_snapshot)"
+        rzfs rollback -r $fs@$dist_fs_last_snap 
+        lzfs send -I $dist_fs_last_snap $fs@$last_snapshot | crzfs receive -uF $fs
+      fi
+    else
+    echo le systeme de fichier nexiste pas sur le serveur de sauvegarde
+      # le systeme de fichier n'existe pas sur le serveur de sauvegarde
+      if lzfs list $fs@$last_snapshot 2> /dev/null > /dev/null ; then
+        # On test l'existence du dernier snapshot du serveur de sauvegarde, s'il existe, il est transféré vers le serveur distant
+        echo "Envoi du snapshot $fs@(X->$last_snapshot)"
+        lzfs send -R $fs@$last_snapshot | crzfs receive -uvd $remotefs
+      fi
+    fi
+
+  done
+
+  # On effectue un rollback du dernier snapshot sur le serveur de sauvegarde
+  rzfs rollback -r $rbackupfs@$last_snapshot
+
+  # On envoie la différence entre le nouveau snapshot et l'ancienne version sur le serveur de sauvegarde
+  echo "Envoi du snapshot $backupfs@($last_snapshot->$new_snapshot)"
+  lzfs send -RI $last_snapshot $backupfs@$new_snapshot | crzfs receive -udv $remotefs
+
+else
+  # premiere copie
+  # On envoie tout ca sur le serveur de sauvegarde
+  echo "Envoi du snapshot $backupfs@(X->$new_snapshot)"
+  rzfs create $remotefs
+  rzfs umount $remotefs
+  lzfs send -R $backupfs@$new_snapshot | crzfs receive -udFv $remotefs
+fi
+
+rzfs inherit -r mountpoint $remotefs
+rzfs mount -a
+
+kill $sync_pid
