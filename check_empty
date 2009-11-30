@@ -1,0 +1,47 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+#
+# 
+#
+# Copyright (C) 2009 Gaëtan Lehmann <gaetan.lehmann@jouy.inra.fr>
+#
+# This program is free software; you can redistribute it and/or
+# modify it under the terms of the GNU General Public License
+# as published by the Free Software Foundation; either version 2
+# of the License, or (at your option) any later version.
+#
+
+import sys, subprocess
+from optparse import OptionParser
+
+parser = OptionParser(usage = '"Usage: check_empty command"')
+parser.disable_interspersed_args()
+parser.add_option("-H", "--host", dest="host", default=None, help="Host where the command must be run. It can be user@host if the remote user is not the same one than the one which runs nagios (default: localhost)")
+parser.add_option("-N", "--name", dest="name", default="EMPTY", help="The plugin name displayed in the status (default: EMPTY)")
+opts, args = parser.parse_args()
+# check the arguments
+if len(args) < 1:
+  parser.error("A command to run must be provided.")
+  sys.exit(1)
+
+nagios_codes = {'OK': 0, 
+                'WARNING': 1, 
+                'CRITICAL': 2,
+                'UNKNOWN': 3,
+                'DEPENDENT': 4}
+
+command = " ".join(args)
+if opts.host:
+  command = "ssh -x %s %s" % (opts.host, command)
+
+p = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, shell=True)
+out = p.communicate()[0]
+retval = p.returncode
+
+if out == "":
+  print "%s OK - No output" % opts.name
+  sys.exit(nagios_codes['OK'])
+else:
+  print "%s CRITICAL - %s lines in output" % (opts.name, len(out.splitlines()))
+  print out
+  sys.exit(nagios_codes['CRITICAL'])
