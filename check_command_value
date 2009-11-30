@@ -1,0 +1,106 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+#
+# 
+#
+# Copyright (C) 2009 Gaëtan Lehmann <gaetan.lehmann@jouy.inra.fr>
+#
+# This program is free software; you can redistribute it and/or
+# modify it under the terms of the GNU General Public License
+# as published by the Free Software Foundation; either version 2
+# of the License, or (at your option) any later version.
+#
+#
+# Ex:
+# load on 5 minutes. Use -g1 for 1 minute, -g3 for 15 minutes
+#   check_command_value -n LOAD -g2 -e 'load average.*: ([0-9.]+)[ ,]+([0-9.]+)[ ,]+([0-9.]+)' LC_ALL=C uptime
+# partition usage
+#   check_command_value -n DISK -g1 -e '([0-9]+)%' -w90 -c97 'LC_ALL=C df -h | egrep "^/dev"'
+# number of process
+#   check_command_value -n PROCS -w 100 -c 150 'ps -elf | wc -l'
+# number of users
+#   check_command_value -n USERS -g1 -w20 -c30 -e '([0-9.]+) user' --debug LC_ALL=C uptime
+
+
+import sys, subprocess, re
+from optparse import OptionParser
+
+nagios_codes = {'OK': 0, 
+                'WARNING': 1, 
+                'CRITICAL': 2,
+                'UNKNOWN': 3,
+                'DEPENDENT': 4}
+
+parser = OptionParser(usage = '"Usage: check_command_value [options] command"')
+parser.disable_interspersed_args()
+parser.add_option("-H", "--host", dest="host", default=None, help="Host where the command must be run. It can be user@host if the remote user is not the same one than the one which runs nagios (default: localhost)")
+parser.add_option("-n", "--name", dest="name", default="COMMAND_VALUE", help="The plugin name displayed in the status (default: COMMAND_VALUE)")
+parser.add_option("-e", "--regexp", dest="regexp", default="([0-9.]+)", help="The regexp used to find the value in the command output (default: ([0-9.]+))")
+parser.add_option("-g", "--group", type="int", dest="group", default=0, help="Match group to used (default: 0 - the whole regexp)")
+parser.add_option("-w", "--warning", type="float", dest="warning", default=1.0, help="Warning level (default: 1.0)")
+parser.add_option("-c", "--critical", type="float", dest="critical", default=None, help="Critical level (default: warning level * 1.33)")
+parser.add_option("--debug", action="store_true", dest="debug", help="Debug mode")
+opts, args = parser.parse_args()
+
+# check the arguments
+if len(args) < 1:
+  parser.error("A command to run must be provided.")
+  sys.exit(1)
+
+command = " ".join(args)
+if opts.host:
+  command = "ssh -x %s %s" % (opts.host, command)
+
+if opts.critical == None:
+  opts.critical = opts.warning * (1+1/3.0)
+
+if opts.debug:
+  print "name is:", repr(opts.name)
+  print "host is:", repr(opts.host)
+  print "regexp is:", repr(opts.regexp)
+  print "group is:", repr(opts.group)
+  print "warning is:", repr(opts.warning)
+  print "critical is:", repr(opts.critical)
+  print "command is:", repr(command)
+
+
+p = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, shell=True)
+out = p.communicate()[0]
+retval = p.returncode
+
+values = []
+
+for l in out.splitlines():
+  
+  if opts.debug: print "matching regexp to line:", repr(l)
+  res = re.search(opts.regexp, l)
+  
+  if res != None and opts.group <= len(res.groups()):
+    try:
+      if opts.debug: print "matched group is", repr(res.group(opts.group))
+      values.append( float(res.group(opts.group)) )
+    except Exception, e:
+      pass
+  else:
+      if opts.debug: print "no match in this line"
+
+if len(values) == 0:
+  print "%s UNKNOWN - no matching value" % opts.name
+  print out
+  sys.exit(nagios_codes['UNKNOWN'])
+
+
+if max(values) > opts.critical:
+  exitStatus = 'CRITICAL'
+elif max(values) > opts.warning:
+  exitStatus = 'WARNING'
+else:
+  exitStatus = "OK"
+
+if len(values) == 1:
+  print "%s %s - value is %s|value=%s;" % (opts.name, exitStatus, values[0], values[0])
+else:
+  print "%s %s - values are %s|values=%s;" % (opts.name, exitStatus, ", ".join(str(val) for val in values), ",".join(str(val) for val in values))
+
+print out
+sys.exit(nagios_codes[exitStatus])
