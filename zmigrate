@@ -4,15 +4,19 @@ set -e
 export LC_ALL=C
 
 if [ $# -lt 2 ]; then
-  echo "usage: zmigrate zone host"
+  echo "usage: zmigrate host zone..."
+  echo "       zmigrate host -a"
   exit 1
 fi
 
-Z=$1
-DEST=$2
+DEST=$1
 shift
-shift
-OPTSFS=$@
+ZONES=$@
+
+# running zones
+if [[ "$ZONES" == "-a" ]]; then
+  ZONES=`zoneadm list | egrep -v '^global$'`
+fi
 
 ########################################################
 # utility functions
@@ -61,9 +65,10 @@ function zshutdown {
 
 # move rctl sections at the end because of bug http://bugs.opensolaris.org/bugdatabase/view_bug.do?bug_id=6565738
 
-echo ========== Copying $Z configuration to the destination host... ========== 
+for Z in $ZONES; do
+  echo ========== Copying $Z configuration to the destination host... ========== 
 
-zonecfg -z $Z export | python -c 'import sys
+  zonecfg -z $Z export | python -c 'import sys
 last=""
 rctl=False
 for l in sys.stdin.readlines():
@@ -76,55 +81,56 @@ for l in sys.stdin.readlines():
   if l == "end\n":
     rctl=False
 print last,
-' | ssh $DEST zonecfg -z $Z
-ssh $DEST zoneadm -z $Z list
+  ' | ssh $DEST zonecfg -z $Z
+  ssh $DEST zoneadm -z $Z list
 
-echo  ========== $Z copied. ========== 
+  echo  ========== $Z copied. ========== 
 
-########################################################
-# pre sync filesystems, to decrease down time
-########################################################
+  ########################################################
+  # pre sync filesystems, to decrease down time
+  ########################################################
 
-echo  ========== Pre-syncing $Z pools on the destination host... ========== 
+  echo  ========== Pre-syncing $Z pools on the destination host... ========== 
 
-# a time stamp to create the snapshots 
-snap=`date +%Y-%m-%d_%Hh%Mm%S`-zmigrate
+  # a time stamp to create the snapshots 
+  snap=`date +%Y-%m-%d_%Hh%Mm%S`-zmigrate
 
-# the mandatory fs: the one in rpool
-syncfs rpool $Z $snap
+  # the mandatory fs: the one in rpool
+  syncfs rpool $Z $snap
 
-# the optional fs: the one in data
-if zfs list data/zones/$Z 2>/dev/null >/dev/null; then
-  syncfs data $Z $snap
-fi
+  # the optional fs: the one in data
+  if zfs list data/zones/$Z 2>/dev/null >/dev/null; then
+    syncfs data $Z $snap
+  fi
 
-echo ==========  $Z pool pre-synced. ========== 
+  echo ==========  $Z pool pre-synced. ========== 
 
-########################################################
-# stop the zone and fully sync the file systems
-########################################################
+  ########################################################
+  # stop the zone and fully sync the file systems
+  ########################################################
 
-echo  ========== Syncing $Z pools on the destination host... ========== 
+  echo  ========== Syncing $Z pools on the destination host... ========== 
 
-zshutdown $Z
-zoneadm -z $Z detach
+  zshutdown $Z
+  zoneadm -z $Z detach
 
-snap2=`date +%Y-%m-%d_%Hh%Mm%S`-zmigrate
-syncfs rpool $Z $snap2
-if zfs list data/zones/$Z 2>/dev/null >/dev/null; then
-  syncfs data $Z $snap2
-fi
+  snap2=`date +%Y-%m-%d_%Hh%Mm%S`-zmigrate
+  syncfs rpool $Z $snap2
+  if zfs list data/zones/$Z 2>/dev/null >/dev/null; then
+    syncfs data $Z $snap2
+  fi
 
-echo  ========== $Z pool synced. ========== 
+  echo  ========== $Z pool synced. ========== 
 
-########################################################
-# move the zone to the new host
-########################################################
+  ########################################################
+  # move the zone to the new host
+  ########################################################
 
-echo  ========== Moving $Z on the destination host... ========== 
+  echo  ========== Moving $Z on the destination host... ========== 
 
-ssh $DEST zoneadm -z $Z attach -u
-ssh $DEST zoneadm -z $Z boot
-zonecfg -z $Z delete -F
+  ssh $DEST zoneadm -z $Z attach -u
+  ssh $DEST zoneadm -z $Z boot
+  zonecfg -z $Z delete -F
 
-echo  ========== $Z moved. ========== 
+  echo  ========== $Z moved. ========== 
+done
