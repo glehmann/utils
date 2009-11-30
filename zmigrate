@@ -22,21 +22,6 @@ fi
 # utility functions
 ########################################################
 
-function syncfs {
-  pool=$1
-  Z=$2
-  snap=$3
-  zfs snapshot -r $pool/zones/$Z@$snap
-  # get the last snapshot on the remote host and use it for an incremental update, if possible
-  distsnap=`ssh $DEST zfs list -r -s creation -o name -H $pool/zones/$Z | grep $pool/zones/$Z@ | tail -1 | cut -d@ -f2`
-  if [ -z "$distsnap" ]; then
-    zfs send -R $pool/zones/$Z@$snap | ssh -c arcfour $DEST zfs receive -dFv $pool
-  else
-    zfs send -RI $distsnap $pool/zones/$Z@$snap | ssh -c arcfour $DEST zfs receive -dFv $pool
-  fi
-
-}
-
 function zshutdown {
   Z=$1
   zlogin $Z shutdown -i0 -g0 -y
@@ -92,16 +77,7 @@ print last,
 
   echo  ========== Pre-syncing $Z pools on the destination host... ========== 
 
-  # a time stamp to create the snapshots 
-  snap=`date +%Y-%m-%d_%Hh%Mm%S`-zmigrate
-
-  # the mandatory fs: the one in rpool
-  syncfs rpool $Z $snap
-
-  # the optional fs: the one in data
-  if zfs list data/zones/$Z 2>/dev/null >/dev/null; then
-    syncfs data $Z $snap
-  fi
+  /usr/local/bin/zbackup $DEST $Z
 
   echo ==========  $Z pool pre-synced. ========== 
 
@@ -114,11 +90,7 @@ print last,
   zshutdown $Z
   zoneadm -z $Z detach
 
-  snap2=`date +%Y-%m-%d_%Hh%Mm%S`-zmigrate
-  syncfs rpool $Z $snap2
-  if zfs list data/zones/$Z 2>/dev/null >/dev/null; then
-    syncfs data $Z $snap2
-  fi
+  /usr/local/bin/zbackup $DEST $Z
 
   echo  ========== $Z pool synced. ========== 
 
