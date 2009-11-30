@@ -1,9 +1,36 @@
 #!/bin/env python
+# -*- coding: iso-8859-15 -*-
 
 import os, commands, sys, tempfile, re
 from optparse import OptionParser
 from cStringIO import StringIO
 
+
+import smtplib
+from email.MIMEText import MIMEText
+def sendTextMail(login, passwd):
+    to = login+"@jouy.inra.fr"
+    print "sending mail to %s... " % to,
+    sys.stdout.flush()
+    fr = "Administrateurs MIMA2 <mima2-adm@jouy.inra.fr>"
+    text = """Bonjour,
+
+Un compte vient de vous être créé sur voxel, le serveur de la plateforme MIMA2.
+
+compte :       %s
+mot de passe : %s
+
+Les administrateurs
+""" % (login, passwd)
+    mail = MIMEText(text)
+    mail['From'] = fr
+    mail['Subject'] = "Nouveau compte sur voxel"
+    mail['To'] = to
+    smtp = smtplib.SMTP()
+    smtp.connect("smtp.jouy.inra.fr")
+    smtp.sendmail(fr, [to], mail.as_string())
+    smtp.close()
+    print "done."
 
 def getPasswd(s) :
 	tab = s.split(":")
@@ -37,12 +64,11 @@ ldif = ""
 def addLdapUser(dict) :
 	global ldif
 	if dict['crypt'] == 'clear' :
-		command = "slappasswd -s "+dict['user']
-		print command
+		command = "slappasswd -s "+dict['passwd']
 		cryptedPasswd = re.search(r'\{([^\}]+)\}(.+)', commands.getoutput(command))
 		dict['passwd'] = cryptedPasswd.group(2)
 		dict['crypt'] = cryptedPasswd.group(1)
-	ldif += """dn:uid=%(user)s,ou=people,dc=jouy,dc=inra,dc=fr
+	ldif += ("""dn:uid=%(user)s,ou=people,dc=jouy,dc=inra,dc=fr
 uid: %(user)s
 cn: %(name)s
 sn: %(name)s
@@ -62,9 +88,9 @@ objectClass: person
 objectClass: posixAccount
 objectClass: shadowAccount
 
-""" % dict
+""" % dict).replace("ë", "e")
 	
-	#print ldif
+#	print ldif
 
 
 def addLocalUser(dict):
@@ -144,12 +170,15 @@ def main() :
 	for user in users :
 		dict = passwdDict[user]
 		
+		# genere un mot de passe
+		mdp = commands.getoutput('pwgen -y -1')
+		
 		# recuperation du passwd
 		if options.passwd :
 			dict.update(shadowDict[user])
 		else :
 			dict.update({
-			'passwd' : user,
+			'passwd' : mdp,
 			'shadowMin' : -1,
 			'shadowMax' : 999999,
 			'shadowWarning' : 7,
@@ -168,7 +197,9 @@ def main() :
 		if not os.path.isdir(os.path.dirname(dict['home'])) :
 			os.makedirs(os.path.dirname(dict['home']))
 			
-		sys.stderr.write("ajout de "+dict['user']+".\n")
+		# sys.stderr.write("ajout de "+dict['user']+".\n")
+		print "New user:", dict['user'], dict['passwd']
+		sendTextMail(dict['user'], dict['passwd'])
 		if options.flat :
 			addLocalUser(dict)
 		else :
@@ -180,7 +211,7 @@ def main() :
 		ldifFile.write(ldif)
 		ldifFile.flush()
 		command = 'ldapadd -f '+ldifFile.name+' -h '+options.ldapHost+' -x -W -D cn=Manager,dc=jouy,dc=inra,dc=fr'
-		print ldif, command
+		# print ldif, command
 		if os.system(command) != 0 :
 			sys.exit(1)
 		
