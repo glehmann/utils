@@ -11,6 +11,7 @@ removeSnapshot() {
 }
 
 removeMountPoint() {
+  ssh voxel lsof /mnt/home-snap
   ssh voxel umount /mnt/home-snap || warn "Erreur lors du demontage du snapshot"
 }
 
@@ -62,6 +63,9 @@ rdiff-backup \
    --exclude-device-files \
    --exclude-fifos \
    --exclude-regexp '.*/non archive/.*' \
+   --exclude-regexp '.*/NON ARCHIVE/.*' \
+   --exclude-regexp '.*/non_archive/.*' \
+   --exclude-regexp '.*/NON_ARCHIVE/.*' \
    voxel::/mnt/home-snap/home/ \
    /data/voxel-images/ \
 || backupFailed
