@@ -1,0 +1,17 @@
+#!/usr/bin/bash
+
+for l in `getent passwd | grep /home/`; do
+  user=`echo $l | cut -d: -f1`
+  gid=`echo $l | cut -d: -f4`
+  home=`echo $l | cut -d: -f6`
+  voxel=`echo $home | sed -e 's@/home/@/voxel/@'`
+  pixel=`echo $home | sed -e 's@/home/@/pixel/@'`
+  if [ ! -d $home ]; then
+    echo creating $home
+    mkdir -p `dirname $home`
+    cp -r /etc/skel $home
+    chown -R $user:$gid $home
+    ln -s $voxel/images $home/images
+    ln -s $pixel/analyse $home/analyse
+  fi
+done
