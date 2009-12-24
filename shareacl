@@ -1,0 +1,21 @@
+#!/bin/bash
+
+# set -ex
+
+if [ $# -lt 2 ]; then
+  echo "usage: shareacl directory user [user ...]"
+  exit 1
+fi
+
+dir=$1
+shift
+users=$@
+
+for u in $users; do
+  # setfacl -R -P -m u:$u:rwx "$dir"
+  # setfacl -R -P -m d:u:$u:rwx "$dir"
+  chmod -R A+user:$u:rwxpdDaARWcCos:fd:allow "$dir"
+done
+
+# setfacl -R -P -m m::rwx "$dir"
+# setfacl -R -P -m d:m::rwx "$dir"
