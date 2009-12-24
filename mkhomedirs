@@ -13,5 +13,7 @@ for l in `getent passwd | grep /home/`; do
     chown -R $user:$gid $home
     ln -s $voxel/images $home/images
     ln -s $pixel/analyse $home/analyse
+  else
+    chown $user:$gid $home
   fi
 done
