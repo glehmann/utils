@@ -1,4 +1,4 @@
-#!/usr/bin/bash
+#!/bin/bash
 
 for l in `getent passwd | grep /home/`; do
   user=`echo $l | cut -d: -f1`
