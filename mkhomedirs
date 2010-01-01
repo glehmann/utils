@@ -12,8 +12,11 @@ for l in `getent passwd | grep /home/`; do
     mkdir -p `dirname $home`
     cp -r /etc/skel $home
     chown -R $user:$gid $home
-    ln -s $voxel/images $home/images
-    ln -s $pixel/analyse $home/analyse
+    # create the links to the data dirs, if not on one of those servers
+    if [ `hostname` != voxel.jouy.inra.fr ] && [ `hostname` != pixel.jouy.inra.fr ]; then
+      ln -s $voxel/images $home/images
+      ln -s $pixel/analyse $home/analyse
+    fi
   else
     chown $user:$gid $home
   fi
