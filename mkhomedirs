@@ -1,5 +1,6 @@
 #!/bin/bash
 
+IFS=$'\n'
 for l in `getent passwd | grep /home/`; do
   user=`echo $l | cut -d: -f1`
   gid=`echo $l | cut -d: -f4`
