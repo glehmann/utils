@@ -1,26 +1,85 @@
 #!/usr/bin/bash
 
-set -e
 export LC_ALL=C
+export PATH=$PATH:/usr/local/bin
 
+DEST=
+ZONES=
+VERBOSE=1
+DESTROY=0
+BACKUP=1
+FORCE=0
+INVALID_OPT=0
+RETENTION=0
+FREQ_RETENTION=10
+RUNNING_ZONES=`zoneadm list | egrep -v '^global$'`
+while [ $# != 0 ]; do
+  while getopts ":advqfBhr:R:" opt; do
+    case $opt in
+      a)
+        ZONES="$ZONES $RUNNING_ZONES"
+        ;;
+      d)
+        DESTROY=1
+        ;;
+      v)
+        VERBOSE=2
+        ;;
+      q)
+        VERBOSE=0
+        ;;
+      f)
+        FORCE=1
+        ;;
+      B)
+        BACKUP=0
+        ;;
+      h)
+        INVALID_OPT=1
+        ;;
+      r)
+        INVALID_OPT=1
+        ;;
+      R)
+        INVALID_OPT=1
+        ;;
+      \?)
+        echo "Invalid option: -$OPTARG" >&2
+        INVALID_OPT=1
+        ;;
+    esac
+  done
+  shift $((OPTIND-1))
+  OPTIND=1
+  if [ "$DEST" == "" ]; then
+    DEST=$1
+  else
+    ZONES="$ZONES $1"
+  fi
+  shift
+done
 
-if [ $# -lt 2 ]; then
-  echo "usage: zbackup host zone..."
-  echo "       zbackup host -a"
+if [ $INVALID_OPT ] || [ "$DEST" == "" ] || [ "ZONES" == "" ]; then
+  echo "usage: zbackup host [options] zone..."
+  echo "       zbackup host [options] -a"
+  echo
+  echo "options:"
+  echo "  -a  process all the running zones"
+  echo "  -d  destroy too old and too frequent snapshots"
+  echo "  -v  verbose mode"
+  echo "  -q  quiet mode"
+  echo "  -f  allow to specify non running zones"
+  echo "  -B  don't run the backup (useful with -d)"
+  echo "  -h  display this message and exit"
+  echo "  -r  retention (default: 60)"
+  echo "  -R  too frequent retention (default: 10)"
   exit 1
 fi
+exit
+echo ==$DEST==$ZONES==
 
 
-DEST=$1
-shift
-ZONES=$@
-
-# running zones
-if [[ "$ZONES" == "-a" ]]; then
-  ZONES=`zoneadm list | egrep -v '^global$'`
-fi
-
-
+set -e
 
 function syncfs {
   pool=$1
@@ -36,37 +95,73 @@ function syncfs {
 
 }
 
+if [ $BACKUP ]; then
+  # first sync the fs to make the freeze as short as possible - zfs snapshot syncs the fs, if there is
+  # not much to sync, the snapshot is done quicker
+  sync
+  
+  # create the snapshots - this step is important, and has very little chance to fail
+  snap=`date +%Y-%m-%d_%Hh%Mm%S`
+  for Z in $ZONES; do
+    # do we have a file system for this zone on data zpool
+    if zfs list data/zones/$Z 2>/dev/null >/dev/null; then
+      # we have two pools to snapshot at the same time - we have to freeze the zone
+      # to be able to to that.
+      running_processes=`ps -o s= -o pid= -z $Z | grep -v T | awk '{print $2}'`
+      kill -s SIGSTOP $running_processes
+      zfs snapshot -r rpool/zones/$Z@$snap
+      zfs snapshot -r data/zones/$Z@$snap
+      kill -s SIGCONT $running_processes
+    else
+      # just take the snapshot
+      zfs snapshot -r rpool/zones/$Z@$snap
+    fi
+  done
+  
+  
+  # copy the fs to the remote host
+  for Z in $ZONES; do
+    syncfs rpool $Z $snap
+    if zfs list data/zones/$Z 2>/dev/null >/dev/null; then
+        syncfs data $Z $snap
+    fi
+  done
+fi
 
-# first sync the fs to make the freeze as short as possible - zfs snapshot syncs the fs, if there is
-# not much to sync, the snapshot is done faster
-sync
-
-# create the snapshots - this step is important, and has very little chance to fail
-snap=`date +%Y-%m-%d_%Hh%Mm%S`
-for Z in $ZONES; do
-  # do we have a file system for this zone on data zpool
-  if zfs list data/zones/$Z 2>/dev/null >/dev/null; then
-    # we have two pools to snapshot at the same time - we have to freeze the zone
-    # to be able to to that.
-    running_processes=`ps -o s= -o pid= -z $Z | grep -v T | awk '{print $2}'`
-    kill -s SIGSTOP $running_processes
-    zfs snapshot -r rpool/zones/$Z@$snap
-    zfs snapshot -r data/zones/$Z@$snap
-    kill -s SIGCONT $running_processes
-  else
-    # just take the snapshot
-    zfs snapshot -r rpool/zones/$Z@$snap
-  fi
-done
-
-
-# copy the fs to the remote host
-for Z in $ZONES; do
-  syncfs rpool $Z $snap
-  if zfs list data/zones/$Z 2>/dev/null >/dev/null; then
-      syncfs data $Z $snap
-  fi
-done
+if [ $DESTROY ]; then  
+  for Z in $ZONES; do
+    # determine the retention times
+    retention=$RETENTION
+    freq_retention=$FREQ_RETENTION
+    # let the user override the default values
+    if [ -f /zones/$Z/.zbackup ]; then
+      source /zones/$Z/.zbackup
+    fi
+    # remote snapshots first
+    zfs list -rHo name rpool/zones/$Z | select_old_snapshots -o $retention # | xargs -L1 -t ssh $DEST zfs destroy
+    zfs list -rHo name rpool/zones/$Z | select_too_frequent_snapshots | select_old_snapshots -o $freq_retention # | xargs -L1 -t ssh $DEST zfs destroy
+    # then local ones
+    zfs list -rHo name rpool/zones/$Z | select_old_snapshots -o $retention # | xargs -L1 -t zfs destroy
+    zfs list -rHo name rpool/zones/$Z | select_too_frequent_snapshots | select_old_snapshots -o $freq_retention # | xargs -L1 -t zfs destroy
+    
+    # do we have a file system for this zone on data zpool
+    if zfs list data/zones/$Z 2>/dev/null >/dev/null; then
+      # determine the retention times
+      retention=$RETENTION
+      freq_retention=$FREQ_RETENTION
+      # let the user override the default values
+      if [ -f /data/zones/$Z/.zbackup ]; then
+        source /data/zones/$Z/.zbackup
+      fi
+      # remote snapshots first
+      zfs list -rHo name data/zones/$Z | select_old_snapshots -o $retention # | xargs -L1 -t ssh $DEST zfs destroy
+      zfs list -rHo name data/zones/$Z | select_too_frequent_snapshots | select_old_snapshots -o $freq_retention # | xargs -L1 -t ssh $DEST zfs destroy
+      # then local ones
+      zfs list -rHo name data/zones/$Z | select_old_snapshots -o $retention # | xargs -L1 -t zfs destroy
+      zfs list -rHo name data/zones/$Z | select_too_frequent_snapshots | select_old_snapshots -o $freq_retention # | xargs -L1 -t zfs destroy
+    fi
+  done
+fi
 
 exit 0
 
