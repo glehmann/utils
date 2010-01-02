@@ -125,7 +125,9 @@ if $BACKUP; then
   done
 fi
 
-if $DESTROY; then  
+if $DESTROY; then
+  echo == this feature is not fully implemented yet          ==
+  echo == it only print the names of the snapshot to destroy ==
   for Z in $ZONES; do
     # determine the retention times
     retention=$RETENTION
