@@ -10,7 +10,7 @@ opts, args = parser.parse_args()
 
 if opts.older == -1:
   # the largest possible value
-  opts.older = 2**30
+  opts.older = 999999999
 
 if not args:
   # read the snap names from stdin
