@@ -8,6 +8,10 @@ parser = OptionParser(usage = '"Usage: select_old_snapshots snap..."')
 parser.add_option("-o", "--older-than", type="int", dest="older", default=60, help="select snapshots older than X days (default: 60)")
 opts, args = parser.parse_args()
 
+if opts.older == -1:
+  # the largest possible value
+  opts.older = 2**30
+
 if not args:
   # read the snap names from stdin
   args = [l.strip() for l in sys.stdin.readlines()]
