@@ -6,10 +6,10 @@ export PATH=$PATH:/usr/local/bin
 DEST=
 ZONES=
 VERBOSE=1
-DESTROY=0
-BACKUP=1
-FORCE=0
-INVALID_OPT=0
+DESTROY=false
+BACKUP=true
+FORCE=false
+INVALID_OPT=false
 RETENTION=0
 FREQ_RETENTION=10
 RUNNING_ZONES=`zoneadm list | egrep -v '^global$'`
@@ -20,7 +20,7 @@ while [ $# != 0 ]; do
         ZONES="$ZONES $RUNNING_ZONES"
         ;;
       d)
-        DESTROY=1
+        DESTROY=true
         ;;
       v)
         VERBOSE=2
@@ -29,19 +29,19 @@ while [ $# != 0 ]; do
         VERBOSE=0
         ;;
       f)
-        FORCE=1
+        FORCE=true
         ;;
       B)
-        BACKUP=0
+        BACKUP=false
         ;;
       h)
-        INVALID_OPT=1
+        INVALID_OPT=true
         ;;
       r)
-        INVALID_OPT=1
+        RETENTION=$OPTARG
         ;;
       R)
-        INVALID_OPT=1
+        FREQ_RETENTION=$OPTARG
         ;;
       \?)
         echo "Invalid option: -$OPTARG" >&2
@@ -59,7 +59,7 @@ while [ $# != 0 ]; do
   shift
 done
 
-if [ $INVALID_OPT ] || [ "$DEST" == "" ] || [ "ZONES" == "" ]; then
+if $INVALID_OPT || [ "$DEST" == "" ] || [ "$ZONES" == "" ]; then
   echo "usage: zbackup host [options] zone..."
   echo "       zbackup host [options] -a"
   echo
@@ -75,9 +75,6 @@ if [ $INVALID_OPT ] || [ "$DEST" == "" ] || [ "ZONES" == "" ]; then
   echo "  -R  too frequent retention (default: 10)"
   exit 1
 fi
-exit
-echo ==$DEST==$ZONES==
-
 
 set -e
 
@@ -95,7 +92,7 @@ function syncfs {
 
 }
 
-if [ $BACKUP ]; then
+if $BACKUP; then
   # first sync the fs to make the freeze as short as possible - zfs snapshot syncs the fs, if there is
   # not much to sync, the snapshot is done quicker
   sync
@@ -128,7 +125,7 @@ if [ $BACKUP ]; then
   done
 fi
 
-if [ $DESTROY ]; then  
+if $DESTROY; then  
   for Z in $ZONES; do
     # determine the retention times
     retention=$RETENTION
