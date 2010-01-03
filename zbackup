@@ -102,7 +102,7 @@ function syncfs {
 function message {
   level=$1
   shift
-  if [ $level -ge $MESSAGE_LEVEL ]; then
+  if [ $level -le $MESSAGE_LEVEL ]; then
     echo == $@ == >&2
   fi
 }
