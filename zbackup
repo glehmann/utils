@@ -3,6 +3,10 @@
 export LC_ALL=C
 export PATH=$PATH:/usr/local/bin
 
+# messages levels
+QUIET=0
+VERBOSE=2
+
 # default retention values
 RETENTION=-1
 FREQ_RETENTION=10
@@ -14,7 +18,7 @@ fi
 # command line parsing
 DEST=
 ZONES=
-VERBOSE=1
+MESSAGE_LEVEL=1
 DESTROY=false
 BACKUP=true
 FORCE=false
@@ -30,10 +34,10 @@ while [ $# != 0 ]; do
         DESTROY=true
         ;;
       v)
-        VERBOSE=2
+        MESSAGE_LEVEL=$VERBOSE
         ;;
       q)
-        VERBOSE=0
+        MESSAGE_LEVEL=$QUIET
         ;;
       f)
         FORCE=true
@@ -91,6 +95,15 @@ function syncfs {
 
 }
 
+function message {
+  level=$1
+  shift
+  if [ $level -ge $MESSAGE_LEVEL ]; then
+    echo $@ >&2
+  fi
+}
+
+
 if $BACKUP; then
   # first sync the fs to make the freeze as short as possible - zfs snapshot syncs the fs, if there is
   # not much to sync, the snapshot is done quicker
@@ -99,6 +112,7 @@ if $BACKUP; then
   # create the snapshots - this step is important, and has very little chance to fail
   snap=`date +%Y-%m-%d_%Hh%Mm%S`
   for Z in $ZONES; do
+    message $VERBOSE snapshotting $Z
     # do we have a file system for this zone on data zpool
     if zfs list data/zones/$Z 2>/dev/null >/dev/null; then
       # we have two pools to snapshot at the same time - we have to freeze the zone
@@ -117,6 +131,7 @@ if $BACKUP; then
   
   # copy the fs to the remote host
   for Z in $ZONES; do
+    message $VERBOSE copying $Z to $DEST
     syncfs rpool $Z $snap
     if zfs list data/zones/$Z 2>/dev/null >/dev/null; then
         syncfs data $Z $snap
@@ -128,6 +143,7 @@ if $DESTROY; then
   echo == this feature is not fully implemented yet          ==
   echo == it only print the names of the snapshot to destroy ==
   for Z in $ZONES; do
+    message $VERBOSE destroying $Z snapshots
     # determine the retention times
     retention=`zfs get -o value -H zbackup:retention rpool/zones/$Z`
     if [ "$retention" == "-" ]; then
@@ -137,6 +153,8 @@ if $DESTROY; then
     if [ "$freq_retention" == "-" ]; then
       freq_retention=$FREQ_RETENTION
     fi
+    message $VERBOSE retention time is $retention on rpool/zones/$Z
+    message $VERBOSE frequent retention time is $freq_retention on rpool/zones/$Z
     # remote snapshots first
     zfs list -rHo name rpool/zones/$Z | select_old_snapshots -o $retention # | xargs -L1 -t ssh $DEST zfs destroy
     zfs list -rHo name rpool/zones/$Z | select_too_frequent_snapshots | select_old_snapshots -o $freq_retention # | xargs -L1 -t ssh $DEST zfs destroy
@@ -155,6 +173,8 @@ if $DESTROY; then
       if [ "$freq_retention" == "-" ]; then
         freq_retention=$FREQ_RETENTION
       fi
+      message $VERBOSE retention time is $retention on data/zones/$Z
+      message $VERBOSE frequent retention time is $freq_retention on data/zones/$Z
       # remote snapshots first
       zfs list -rHo name data/zones/$Z | select_old_snapshots -o $retention # | xargs -L1 -t ssh $DEST zfs destroy
       zfs list -rHo name data/zones/$Z | select_too_frequent_snapshots | select_old_snapshots -o $freq_retention # | xargs -L1 -t ssh $DEST zfs destroy
