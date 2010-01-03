@@ -12,10 +12,15 @@ shift
 users=$@
 
 for u in $users; do
-  # setfacl -R -P -m u:$u:rwx "$dir"
-  # setfacl -R -P -m d:u:$u:rwx "$dir"
-  chmod -R A+user:$u:rwxpdDaARWcCos:fd:allow "$dir"
+  if [ `uname` == "SunOS" ]; then
+    chmod -R A+user:$u:rwxpdDaARWcCos:fd:allow "$dir"
+  else
+    setfacl -R -P -m u:$u:rwx "$dir"
+    setfacl -R -P -m d:u:$u:rwx "$dir"
+  fi
 done
 
-# setfacl -R -P -m m::rwx "$dir"
-# setfacl -R -P -m d:m::rwx "$dir"
+if [ `uname` != "SunOS" ]; then
+  setfacl -R -P -m m::rwx "$dir"
+  setfacl -R -P -m d:m::rwx "$dir"
+fi
