@@ -153,8 +153,7 @@ if $DESTROY; then
     if [ "$freq_retention" == "-" ]; then
       freq_retention=$FREQ_RETENTION
     fi
-    message $VERBOSE retention time is $retention on rpool/zones/$Z
-    message $VERBOSE frequent retention time is $freq_retention on rpool/zones/$Z
+    message $VERBOSE rpool/zones/$Z retention times are $retention/$freq_retention
     # remote snapshots first
     zfs list -rHo name rpool/zones/$Z | select_old_snapshots -o $retention # | xargs -L1 -t ssh $DEST zfs destroy
     zfs list -rHo name rpool/zones/$Z | select_too_frequent_snapshots | select_old_snapshots -o $freq_retention # | xargs -L1 -t ssh $DEST zfs destroy
@@ -173,8 +172,7 @@ if $DESTROY; then
       if [ "$freq_retention" == "-" ]; then
         freq_retention=$FREQ_RETENTION
       fi
-      message $VERBOSE retention time is $retention on data/zones/$Z
-      message $VERBOSE frequent retention time is $freq_retention on data/zones/$Z
+      message $VERBOSE data/zones/$Z retention times are $retention/$freq_retention
       # remote snapshots first
       zfs list -rHo name data/zones/$Z | select_old_snapshots -o $retention # | xargs -L1 -t ssh $DEST zfs destroy
       zfs list -rHo name data/zones/$Z | select_too_frequent_snapshots | select_old_snapshots -o $freq_retention # | xargs -L1 -t ssh $DEST zfs destroy
