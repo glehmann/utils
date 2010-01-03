@@ -129,11 +129,13 @@ if $DESTROY; then
   echo == it only print the names of the snapshot to destroy ==
   for Z in $ZONES; do
     # determine the retention times
-    retention=$RETENTION
-    freq_retention=$FREQ_RETENTION
-    # let the user override the default values
-    if [ -f /zones/$Z/.zbackup ]; then
-      source /zones/$Z/.zbackup
+    retention=`zfs get -o value -H zbackup:retention rpool/zones/$Z`
+    if [ "$retention" == "-" ]; then
+      retention=$RETENTION
+    fi
+    freq_retention=`zfs get -o value -H zbackup:freq_retention rpool/zones/$Z`
+    if [ "$freq_retention" == "-" ]; then
+      freq_retention=$FREQ_RETENTION
     fi
     # remote snapshots first
     zfs list -rHo name rpool/zones/$Z | select_old_snapshots -o $retention # | xargs -L1 -t ssh $DEST zfs destroy
@@ -145,11 +147,13 @@ if $DESTROY; then
     # do we have a file system for this zone on data zpool
     if zfs list data/zones/$Z 2>/dev/null >/dev/null; then
       # determine the retention times
-      retention=$RETENTION
-      freq_retention=$FREQ_RETENTION
-      # let the user override the default values
-      if [ -f /data/zones/$Z/.zbackup ]; then
-        source /data/zones/$Z/.zbackup
+      retention=`zfs get -o value -H zbackup:retention data/zones/$Z`
+      if [ "$retention" == "-" ]; then
+        retention=$RETENTION
+      fi
+      freq_retention=`zfs get -o value -H zbackup:freq_retention data/zones/$Z`
+      if [ "$freq_retention" == "-" ]; then
+        freq_retention=$FREQ_RETENTION
       fi
       # remote snapshots first
       zfs list -rHo name data/zones/$Z | select_old_snapshots -o $retention # | xargs -L1 -t ssh $DEST zfs destroy
