@@ -214,7 +214,11 @@ def main() :
 		# print ldif, command
 		if os.system(command) != 0 :
 			sys.exit(1)
-		
 	
+	os.system('/usr/local/bin/mkhomedirs')
+	for server in ['pixel', 'itk1', 'itk2']:
+	  command = "ssh %s /usr/local/bin/mkhomedirs" % server
+	  os.system(command)
+
 if __name__ == '__main__' :
         main()
