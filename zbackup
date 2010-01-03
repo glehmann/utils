@@ -3,6 +3,15 @@
 export LC_ALL=C
 export PATH=$PATH:/usr/local/bin
 
+# default retention values
+RETENTION=-1
+FREQ_RETENTION=10
+# let the user change them
+if [ -f /etc/zbackup ]; then
+  source /etc/zbackup
+fi
+
+# command line parsing
 DEST=
 ZONES=
 VERBOSE=1
@@ -10,11 +19,9 @@ DESTROY=false
 BACKUP=true
 FORCE=false
 INVALID_OPT=false
-RETENTION=-1
-FREQ_RETENTION=10
 RUNNING_ZONES=`zoneadm list | egrep -v '^global$'`
 while [ $# != 0 ]; do
-  while getopts ":advqfBhr:R:" opt; do
+  while getopts ":advqfBh" opt; do
     case $opt in
       a)
         ZONES="$ZONES $RUNNING_ZONES"
@@ -36,12 +43,6 @@ while [ $# != 0 ]; do
         ;;
       h)
         INVALID_OPT=true
-        ;;
-      r)
-        RETENTION=$OPTARG
-        ;;
-      R)
-        FREQ_RETENTION=$OPTARG
         ;;
       \?)
         echo "Invalid option: -$OPTARG" >&2
@@ -71,8 +72,6 @@ if $INVALID_OPT || [ "$DEST" == "" ] || [ "$ZONES" == "" ]; then
   echo "  -f  allow to specify non running zones"
   echo "  -B  don't run the backup (useful with -d)"
   echo "  -h  display this message and exit"
-  echo "  -r  retention (default: 60)"
-  echo "  -R  too frequent retention (default: 10)"
   exit 1
 fi
 
