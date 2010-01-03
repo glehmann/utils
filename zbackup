@@ -85,12 +85,16 @@ function syncfs {
   pool=$1
   Z=$2
   snap=$3
+  rcvflags=
+  if [ $MESSAGE_LEVEL != $QUIET ]; then
+    rcvflags="$rcvflags -v"
+  fi
   # get the last snapshot on the remote host and use it for an incremental update, if possible
   distsnap=`ssh $DEST zfs list -r -s creation -o name -H $pool/zones/$Z | grep $pool/zones/$Z@ | tail -1 | cut -d@ -f2`
   if [ -z "$distsnap" ]; then
-    zfs send -R $pool/zones/$Z@$snap | ssh -c arcfour $DEST zfs receive -dFv $pool
+    zfs send -R $pool/zones/$Z@$snap | ssh -c arcfour $DEST zfs receive -dF $rcvflags $pool
   else
-    zfs send -RI $distsnap $pool/zones/$Z@$snap | ssh -c arcfour $DEST zfs receive -dFv $pool
+    zfs send -RI $distsnap $pool/zones/$Z@$snap | ssh -c arcfour $DEST zfs receive -dF $rcvflags $pool
   fi
 
 }
