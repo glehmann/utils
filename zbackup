@@ -125,7 +125,7 @@ for Z in $ZONES; do
     UNIQ_ZONES="$UNIQ_ZONES $Z"
   fi
   if ! $FORCE && ! isIn $Z $RUNNING_ZONES; then
-    echo $Z is not running >&2
+    echo error: $Z is not running >&2
     echo try to run again with -f if this is expected. >&2
     exit 2
   fi
