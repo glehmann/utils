@@ -14,8 +14,8 @@ users=$@
 if [ `uname` == "SunOS" ]; then
   for u in $users; do
     # there is no -P option in chmod, so we must use find to avoid symlinks
-    gfind "$dir" -type f -print0 | gxargs -0 chmod A+user:$u:rwxpdDaARWcCos:fd:allow 
-    gfind "$dir" -type d -print0 | gxargs -0 chmod A+user:$u:rwxpdDaARWcCos:fd:allow 
+    find "$dir" -type f -exec chmod A+user:$u:rwxpdDaARWcCos:fd:allow "{}" \;
+    find "$dir" -type d -exec chmod A+user:$u:rwxpdDaARWcCos:fd:allow "{}" \;
   done
 else
   for u in $users; do
