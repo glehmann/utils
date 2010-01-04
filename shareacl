@@ -11,16 +11,17 @@ dir=$1
 shift
 users=$@
 
-for u in $users; do
-  if [ `uname` == "SunOS" ]; then
-    chmod -R A+user:$u:rwxpdDaARWcCos:fd:allow "$dir"
-  else
+if [ `uname` == "SunOS" ]; then
+  for u in $users; do
+    # there is no -P option in chmod, so we must use find to avoid symlinks
+    gfind "$dir" -type f -print0 | gxargs -0 chmod A+user:$u:rwxpdDaARWcCos:fd:allow 
+    gfind "$dir" -type d -print0 | gxargs -0 chmod A+user:$u:rwxpdDaARWcCos:fd:allow 
+  done
+else
+  for u in $users; do
     setfacl -R -P -m u:$u:rwx "$dir"
     setfacl -R -P -m d:u:$u:rwx "$dir"
-  fi
-done
-
-if [ `uname` != "SunOS" ]; then
+  done
   setfacl -R -P -m m::rwx "$dir"
   setfacl -R -P -m d:m::rwx "$dir"
 fi
