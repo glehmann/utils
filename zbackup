@@ -119,14 +119,14 @@ function destroyfs {
   for snap in `zfs list -rHo name -t snapshot $fs | select_old_snapshots -o $retention`; do
     message $VERBOSE "destroying $snap (too old)"
     # remote snapshots first
-    #echo ssh $DEST zfs destroy $snap
-    #echo zfs destroy $snap
+    ssh $DEST zfs destroy $snap
+    zfs destroy $snap
   done
   for snap in `zfs list -rHo name -t snapshot $fs | select_too_frequent_snapshots | select_old_snapshots -o $freq_retention`; do
     message $VERBOSE "destroying $snap (too frequent)"
     # remote snapshots first
-    #echo ssh $DEST zfs destroy $snap
-    #echo zfs destroy $snap
+    ssh $DEST zfs destroy $snap
+    zfs destroy $snap
   done
   s2=`zfs get -Hp -o value used $fs`
   message $VERBOSE rpool/zones/$Z - $(((s1-s2)/1024**2))MB freed
