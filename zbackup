@@ -79,6 +79,7 @@ if $INVALID_OPT || [ "$DEST" == "" ] || [ "$ZONES" == "" ]; then
   echo "  -q  quiet mode"
   echo "  -f  allow to specify non running zones"
   echo "  -B  don't run the backup (useful with -d)"
+  echo "  -C  don't run the consistency check"
   echo "  -h  display this message and exit"
   exit 1
 fi
