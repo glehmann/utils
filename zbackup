@@ -103,6 +103,32 @@ function syncfs {
 
 }
 
+function destroyfs {
+  fs=$1
+  # determine the retention times
+  retention=`zfs get -o value -H zbackup:retention $fs`
+  if [ "$retention" == "-" ]; then
+    retention=$RETENTION
+  fi
+  freq_retention=`zfs get -o value -H zbackup:freq_retention $fs`
+  if [ "$freq_retention" == "-" ]; then
+    freq_retention=$FREQ_RETENTION
+  fi
+  message $VERBOSE rpool/zones/$Z retention times are $retention/$freq_retention
+  for snap in `zfs list -rHo name $fs | select_old_snapshots -o $retention`; do
+    message $VERBOSE "destroying $snap (too old)"
+    # remote snapshots first
+    #echo ssh $DEST zfs destroy $snap
+    #echo zfs destroy $snap
+  done
+  for snap in `zfs list -rHo name $fs | select_too_frequent_snapshots | select_old_snapshots -o $freq_retention`; do
+    message $VERBOSE "destroying $snap (too frequent)"
+    # remote snapshots first
+    #echo ssh $DEST zfs destroy $snap
+    #echo zfs destroy $snap
+  done
+}
+
 function message {
   level=$1
   shift
@@ -205,54 +231,10 @@ fi
 if $DESTROY; then
   for Z in $ZONES; do
     message $VERBOSE destroying $Z snapshots
-    # determine the retention times
-    retention=`zfs get -o value -H zbackup:retention rpool/zones/$Z`
-    if [ "$retention" == "-" ]; then
-      retention=$RETENTION
-    fi
-    freq_retention=`zfs get -o value -H zbackup:freq_retention rpool/zones/$Z`
-    if [ "$freq_retention" == "-" ]; then
-      freq_retention=$FREQ_RETENTION
-    fi
-    message $VERBOSE rpool/zones/$Z retention times are $retention/$freq_retention
-    for snap in `zfs list -rHo name rpool/zones/$Z | select_old_snapshots -o $retention`; do
-      message $VERBOSE "destroying $snap (too old)"
-      # remote snapshots first
-      #echo ssh $DEST zfs destroy $snap
-      #echo zfs destroy $snap
-    done
-    for snap in `zfs list -rHo name rpool/zones/$Z | select_too_frequent_snapshots | select_old_snapshots -o $freq_retention`; do
-      message $VERBOSE "destroying $snap (too frequent)"
-      # remote snapshots first
-      #echo ssh $DEST zfs destroy $snap
-      #echo zfs destroy $snap
-    done
-    
+    destroyfs rpool/zones/$Z
     # do we have a file system for this zone on data zpool
     if zfs list data/zones/$Z 2>/dev/null >/dev/null; then
-      # determine the retention times
-      retention=`zfs get -o value -H zbackup:retention data/zones/$Z`
-      if [ "$retention" == "-" ]; then
-        retention=$RETENTION
-      fi
-      freq_retention=`zfs get -o value -H zbackup:freq_retention data/zones/$Z`
-      if [ "$freq_retention" == "-" ]; then
-        freq_retention=$FREQ_RETENTION
-      fi
-      message $VERBOSE data/zones/$Z retention times are $retention/$freq_retention
-      # remote snapshots first
-      for snap in `zfs list -rHo name data/zones/$Z | select_old_snapshots -o $retention`; do
-        message $VERBOSE "destroying $snap (too old)"
-        # remote snapshots first
-        #echo ssh $DEST zfs destroy $snap
-        #echo zfs destroy $snap
-      done
-      for snap in `zfs list -rHo name data/zones/$Z | select_too_frequent_snapshots | select_old_snapshots -o $freq_retention`; do
-        message $VERBOSE "destroying $snap (too frequent)"
-        # remote snapshots first
-        #echo ssh $DEST zfs destroy $snap
-        #echo zfs destroy $snap
-      done
+      destroyfs data/zones/$Z
     fi
   done
 fi
