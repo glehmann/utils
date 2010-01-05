@@ -105,6 +105,7 @@ function syncfs {
 
 function destroyfs {
   fs=$1
+  s1=`zfs get -Hp -o value used $fs`
   # determine the retention times
   retention=`zfs get -o value -H zbackup:retention $fs`
   if [ "$retention" == "-" ]; then
@@ -127,6 +128,8 @@ function destroyfs {
     #echo ssh $DEST zfs destroy $snap
     #echo zfs destroy $snap
   done
+  s2=`zfs get -Hp -o value used $fs`
+  message $VERBOSE rpool/zones/$Z - $(((s1-s2)/1024**2))MB freed
 }
 
 function message {
@@ -239,6 +242,7 @@ if $DESTROY; then
   done
 fi
 
+message $VERBOSE backup OK
 exit 0
 
 
