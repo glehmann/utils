@@ -54,7 +54,7 @@ while [ $# != 0 ]; do
         ;;
       \?)
         echo "Invalid option: -$OPTARG" >&2
-        INVALID_OPT=1
+        INVALID_OPT=true
         ;;
     esac
   done
