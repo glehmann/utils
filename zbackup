@@ -203,8 +203,6 @@ fi
 
 
 if $DESTROY; then
-  echo == this feature is not fully implemented yet          ==
-  echo == it only print the names of the snapshot to destroy ==
   for Z in $ZONES; do
     message $VERBOSE destroying $Z snapshots
     # determine the retention times
@@ -217,12 +215,18 @@ if $DESTROY; then
       freq_retention=$FREQ_RETENTION
     fi
     message $VERBOSE rpool/zones/$Z retention times are $retention/$freq_retention
-    # remote snapshots first
-    zfs list -rHo name rpool/zones/$Z | select_old_snapshots -o $retention # | xargs -L1 -t ssh $DEST zfs destroy
-    zfs list -rHo name rpool/zones/$Z | select_too_frequent_snapshots | select_old_snapshots -o $freq_retention # | xargs -L1 -t ssh $DEST zfs destroy
-    # then local ones
-    zfs list -rHo name rpool/zones/$Z | select_old_snapshots -o $retention # | xargs -L1 -t zfs destroy
-    zfs list -rHo name rpool/zones/$Z | select_too_frequent_snapshots | select_old_snapshots -o $freq_retention # | xargs -L1 -t zfs destroy
+    for snap in `zfs list -rHo name rpool/zones/$Z | select_old_snapshots -o $retention`; do
+      message $VERBOSE "destroying $snap (too old)"
+      # remote snapshots first
+      #echo ssh $DEST zfs destroy $snap
+      #echo zfs destroy $snap
+    done
+    for snap in `zfs list -rHo name rpool/zones/$Z | select_too_frequent_snapshots | select_old_snapshots -o $freq_retention`; do
+      message $VERBOSE "destroying $snap (too frequent)"
+      # remote snapshots first
+      #echo ssh $DEST zfs destroy $snap
+      #echo zfs destroy $snap
+    done
     
     # do we have a file system for this zone on data zpool
     if zfs list data/zones/$Z 2>/dev/null >/dev/null; then
@@ -237,11 +241,18 @@ if $DESTROY; then
       fi
       message $VERBOSE data/zones/$Z retention times are $retention/$freq_retention
       # remote snapshots first
-      zfs list -rHo name data/zones/$Z | select_old_snapshots -o $retention # | xargs -L1 -t ssh $DEST zfs destroy
-      zfs list -rHo name data/zones/$Z | select_too_frequent_snapshots | select_old_snapshots -o $freq_retention # | xargs -L1 -t ssh $DEST zfs destroy
-      # then local ones
-      zfs list -rHo name data/zones/$Z | select_old_snapshots -o $retention # | xargs -L1 -t zfs destroy
-      zfs list -rHo name data/zones/$Z | select_too_frequent_snapshots | select_old_snapshots -o $freq_retention # | xargs -L1 -t zfs destroy
+      for snap in `zfs list -rHo name data/zones/$Z | select_old_snapshots -o $retention`; do
+        message $VERBOSE "destroying $snap (too old)"
+        # remote snapshots first
+        #echo ssh $DEST zfs destroy $snap
+        #echo zfs destroy $snap
+      done
+      for snap in `zfs list -rHo name data/zones/$Z | select_too_frequent_snapshots | select_old_snapshots -o $freq_retention`; do
+        message $VERBOSE "destroying $snap (too frequent)"
+        # remote snapshots first
+        #echo ssh $DEST zfs destroy $snap
+        #echo zfs destroy $snap
+      done
     fi
   done
 fi
