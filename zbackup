@@ -117,13 +117,13 @@ function destroyfs {
   fi
   message $VERBOSE rpool/zones/$Z retention times are $retention/$freq_retention
   for snap in `zfs list -rHo name -t snapshot $fs | select_old_snapshots -o $retention`; do
-    message $VERBOSE "destroying $snap (too old)"
+    message $VERBOSE "$snap (too old)"
     # remote snapshots first
     ssh $DEST zfs destroy $snap
     zfs destroy $snap
   done
   for snap in `zfs list -rHo name -t snapshot $fs | select_too_frequent_snapshots | select_old_snapshots -o $freq_retention`; do
-    message $VERBOSE "destroying $snap (too frequent)"
+    message $VERBOSE "$snap (too frequent)"
     # remote snapshots first
     ssh $DEST zfs destroy $snap
     zfs destroy $snap
