@@ -22,10 +22,11 @@ MESSAGE_LEVEL=1
 DESTROY=false
 BACKUP=true
 FORCE=false
+CONSISTENCY=true
 INVALID_OPT=false
 RUNNING_ZONES=`zoneadm list | egrep -v '^global$'`
 while [ $# != 0 ]; do
-  while getopts ":advqfBh" opt; do
+  while getopts ":advqfBhC" opt; do
     case $opt in
       a)
         ZONES="$ZONES $RUNNING_ZONES"
@@ -44,6 +45,9 @@ while [ $# != 0 ]; do
         ;;
       B)
         BACKUP=false
+        ;;
+      C)
+        CONSISTENCY=false
         ;;
       h)
         INVALID_OPT=true
@@ -167,6 +171,36 @@ if $BACKUP; then
     fi
   done
 fi
+
+retcode=0
+if $CONSISTENCY; then
+  message $VERBOSE checking snapshots consistency
+  for Z in $ZONES; do
+    zfs list -rHo name rpool/zones/$Z >/tmp/$Z.local
+    ssh $DEST zfs list -rHo name rpool/zones/$Z >/tmp/$Z.dist
+    if zfs list data/zones/$Z 2>/dev/null >/dev/null; then
+      zfs list -rHo name data/zones/$Z >>/tmp/$Z.local
+      ssh $DEST zfs list -rHo name data/zones/$Z >>/tmp/$Z.dist
+    fi
+    diffs=`comm -3 /tmp/$Z.local /tmp/$Z.dist`
+    if [ "$diffs" == "" ]; then
+      message $VERBOSE $Z - OK
+    else
+      message $VERBOSE $Z - ERROR
+      echo "error: snapshots on local host and on remote host are not the same"
+      echo "       something must have gone wrong during a previous backup"
+      echo "       please fix by hand"
+      echo "       no destruction of snapshot will be made before that"
+      echo "       the list of inconsistent snapshots follows"
+      echo "$diffs"
+      retcode=3
+    fi
+  done
+fi
+if [ $retcode != 0 ]; then
+  exit $retcode
+fi
+
 
 if $DESTROY; then
   echo == this feature is not fully implemented yet          ==
