@@ -77,7 +77,7 @@ print last,
 
   echo  ========== Pre-syncing $Z pools on the destination host... ========== 
 
-  /usr/local/bin/zbackup $DEST $Z
+  /usr/local/bin/zbackup $DEST $Z -C
 
   echo ==========  $Z pool pre-synced. ========== 
 
@@ -90,7 +90,7 @@ print last,
   zshutdown $Z
   zoneadm -z $Z detach
 
-  /usr/local/bin/zbackup $DEST $Z
+  /usr/local/bin/zbackup $DEST $Z -Cf
 
   echo  ========== $Z pool synced. ========== 
 
