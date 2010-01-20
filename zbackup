@@ -116,7 +116,7 @@ function destroyfs {
   if [ "$freq_retention" == "-" ]; then
     freq_retention=$FREQ_RETENTION
   fi
-  message $VERBOSE rpool/zones/$Z retention times are $retention/$freq_retention
+  message $VERBOSE $fs retention times are $retention/$freq_retention
   for snap in `zfs list -rHo name -t snapshot $fs | select_old_snapshots -o $retention`; do
     message $VERBOSE "$snap (too old)"
     # remote snapshots first
@@ -130,7 +130,7 @@ function destroyfs {
     zfs destroy $snap
   done
   s2=`zfs get -Hp -o value used $fs`
-  message $VERBOSE rpool/zones/$Z - $(((s1-s2)/1024**2))MB freed
+  message $VERBOSE $fs - $(((s1-s2)/1024**2))MB freed
 }
 
 function message {
