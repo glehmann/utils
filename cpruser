@@ -64,7 +64,7 @@ ldif = ""
 def addLdapUser(dict) :
 	global ldif
 	if dict['crypt'] == 'clear' :
-		command = "slappasswd -s "+dict['passwd']
+		command = "/usr/local/sbin/slappasswd -s "+dict['passwd']
 		cryptedPasswd = re.search(r'\{([^\}]+)\}(.+)', commands.getoutput(command))
 		dict['passwd'] = cryptedPasswd.group(2)
 		dict['crypt'] = cryptedPasswd.group(1)
