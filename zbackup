@@ -181,10 +181,14 @@ if $BACKUP; then
       # we have two pools to snapshot at the same time - we have to freeze the zone
       # to be able to to that.
       running_processes=`ps -o s= -o pid= -z $Z | grep -v T | awk '{print $2}'`
-      kill -s SIGSTOP $running_processes
+      if [ "$running_processes" != "" ]; then
+        kill -s SIGSTOP $running_processes
+      fi
       zfs snapshot -r rpool/zones/$Z@$snap
       zfs snapshot -r data/zones/$Z@$snap
-      kill -s SIGCONT $running_processes
+      if [ "$running_processes" != "" ]; then
+        kill -s SIGCONT $running_processes
+      fi
     else
       # just take the snapshot
       zfs snapshot -r rpool/zones/$Z@$snap
