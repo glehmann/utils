@@ -1,7 +1,7 @@
 #!/bin/env python
 # -*- coding: iso-8859-15 -*-
 
-import os, commands, sys, tempfile, re
+import os, commands, sys, tempfile, re, random, crypt
 from optparse import OptionParser
 from cStringIO import StringIO
 
@@ -64,10 +64,14 @@ ldif = ""
 def addLdapUser(dict) :
 	global ldif
 	if dict['crypt'] == 'clear' :
-		command = "/usr/local/sbin/slappasswd -s "+dict['passwd']
-		cryptedPasswd = re.search(r'\{([^\}]+)\}(.+)', commands.getoutput(command))
-		dict['passwd'] = cryptedPasswd.group(2)
-		dict['crypt'] = cryptedPasswd.group(1)
+		salt_values = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz./'
+		salt = "".join([salt_values[random.randint(0, len(salt_values))-1] for i in range(10)])
+                dict['passwd'] = crypt.crypt(dict['passwd'], salt)
+		dict['crypt'] = "CRYPT"
+		# command = "/usr/local/sbin/slappasswd -s "+dict['passwd']
+		# cryptedPasswd = re.search(r'\{([^\}]+)\}(.+)', commands.getoutput(command))
+		# dict['passwd'] = cryptedPasswd.group(2)
+		# dict['crypt'] = cryptedPasswd.group(1)
 	ldif += ("""dn:uid=%(user)s,ou=people,dc=jouy,dc=inra,dc=fr
 uid: %(user)s
 cn: %(name)s
