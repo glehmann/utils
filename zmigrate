@@ -24,19 +24,23 @@ fi
 
 function zshutdown {
   Z=$1
-  zlogin $Z shutdown -i0 -g0 -y
-  for i in {12..1}; do
-    if [ -z "`zoneadm -z $Z list -p | grep :installed:`" ]; then
-      echo waiting for $Z to shutdown. $i attempts left before killing...
-      sleep 5
-    else
-      echo $Z halted.
-      return 0
-    fi
-  done
-  echo killing $Z...
-  zoneadm -z $Z halt
-  echo $Z halted.
+  if [ -z "`zoneadm -z $Z list -p | grep :installed:`" ]; then
+    zlogin $Z shutdown -i0 -g0 -y
+    for i in {12..1}; do
+      if [ -z "`zoneadm -z $Z list -p | grep :installed:`" ]; then
+        echo waiting for $Z to shutdown. $i attempts left before killing...
+        sleep 5
+      else
+        echo $Z halted.
+        return 0
+      fi
+    done
+    echo killing $Z...
+    zoneadm -z $Z halt
+    echo $Z halted.
+  else
+    echo $Z already halted.
+  fi
 }
 
 ########################################################
@@ -77,7 +81,7 @@ print last,
 
   echo  ========== Pre-syncing $Z pools on the destination host... ========== 
 
-  /usr/local/bin/zbackup $DEST $Z -C
+  /usr/local/bin/zbackup $DEST $Z -Cf
 
   echo ==========  $Z pool pre-synced. ========== 
 
