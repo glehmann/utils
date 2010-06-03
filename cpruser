@@ -220,7 +220,7 @@ def main() :
 			sys.exit(1)
 	
 	os.system('/usr/local/bin/mkhomedirs')
-	for server in ['pixel', 'itk1', 'itk2']:
+	for server in ['pixel', 'itk1', 'itk2', 'brian']:
 	  command = "ssh %s /usr/local/bin/mkhomedirs" % server
 	  os.system(command)
 
